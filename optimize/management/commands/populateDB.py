@@ -12,9 +12,13 @@ from optimize.models import Stock, Price
 
 
 URL = settings.URL
+print(URL)
+# URL = 'https://sandbox.iexapis.com/stable/'
 token = settings.TOKEN
+print(token)
+# token = 'Tpk_1bb2b6a700494a589416f560b85e4a9a'
 TEST_URL = settings.TEST_URL
-TEST_token = settings.TEST_token
+TEST_TOKEN = settings.TEST_TOKEN
 symbols = 'ref-data/iex/symbols'
 PARAMS = {'token':token}
 
