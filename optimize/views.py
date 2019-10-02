@@ -7,6 +7,8 @@ import numpy as np
 import pandas as pd 
 from scipy.optimize import minimize
 import sys
+
+
 # Create your views here.
 
 from rest_framework import status
@@ -14,6 +16,18 @@ from rest_framework import status
 
 from .models import Stock, Price
 from .serializers import StockSerializer, PriceSerializer
+
+import datetime
+import holidays
+
+ONE_DAY = datetime.timedelta(days=1)
+HOLIDAYS_US = holidays.US()
+
+def last_business_day():
+    business_day = datetime.date.today()
+    while business_day.weekday() in holidays.WEEKEND or business_day in HOLIDAYS_US:
+        business_day -= ONE_DAY
+    return business_day
 
 class Equity():
     def __init__(self,name,price_list):
@@ -27,7 +41,7 @@ class Equity():
         df = df.dropna()
         return df
 
-
+#TODO make API CALLS INSTEAD if not IN DATABASE
 class Optimize(APIView):
 
  
@@ -53,10 +67,12 @@ class Optimize(APIView):
     def get(self,request,stocks_csv):
         stocks_parsed = stocks_csv.split(',')
         stocks = Stock.objects.filter(symbol__in=stocks_parsed)
+        if not stocks:
+            return Response('No symbols found', status=status.HTTP_404_NOT_FOUND)
         equity_list = []
         mean_list = []
         for item in stocks:
-            if(item.prices.all()[:21].count() == 21):
+            if(item.prices.all()[:20].count() == 20):
                 equity_list.append(Equity(item.symbol,list(item.prices.all()[:21].values_list('close_price',flat=True))))
             else:
                 return  Response('{symb} does not have enough historical data'.format(symb=item.symbol), status=status.HTTP_409_CONFLICT)
@@ -64,18 +80,12 @@ class Optimize(APIView):
             equity.df = equity.get_dataframe()
             equity.mean = np.mean(equity.df['log_return'])
             equity.std = np.std(equity.df['log_return'])
-            #print(equity.mean,'mean')
-            #print(equity.std,'std')
             mean_list.append(equity.mean)
         cov_matrix = np.cov([e.df['log_return'] for e in equity_list])
-        #print('cov',cov_matrix)
         optimal_weights = self.findOptimalWeight(equity_list,cov_matrix,mean_list)
-        #print('opt',optimal_weights)
-        jsonDict = {equity.name: {'weight': round(weight,4), 'single_exp_return':equity.mean,'std':equity.std} for equity,weight in zip(equity_list,optimal_weights)}
+        jsonDict = {equity.name: {'weight': round(weight,4), 'single_exp_return':round(equity.mean,5),'std':round(equity.std,5)} for equity,weight in zip(equity_list,optimal_weights)}
         jsonDict['exp_return'] = np.dot(mean_list,optimal_weights) * 252
-        #print('exp',jsonDict['exp_return'])
         jsonDict['stdev'] = np.sqrt(np.dot(np.dot(optimal_weights.T,cov_matrix),optimal_weights)*252)
-        #print('std',jsonDict['stdev'])
         return Response(jsonDict)
             
 

@@ -41,12 +41,14 @@ class Command(BaseCommand):
         for i in range(100): 
             try:
                 r = call_api(Url= URL + symbols, Params= PARAMS)
+                print(r)
             except (requests.ConnectionError, requests.Timeout, requests.ReadTimeout):
                 continue
             break
                     
         if r:
             data = r.json()
+            print(data)
             for s in data:
                 #create stock or if already made then call close price instead.
                 stock, created = Stock.objects.get_or_create(symbol=s['symbol'])
@@ -54,6 +56,7 @@ class Command(BaseCommand):
                 for i in range(100):
                     try:
                         res = call_api(Url=URL+history_url,Params= PARAMS)
+                        print(stock)
                     except (requests.ConnectionError, requests.Timeout, requests.ReadTimeout):
                         continue
                     break

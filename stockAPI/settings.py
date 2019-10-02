@@ -28,9 +28,8 @@ TEST_TOKEN = os.getenv('TEST_TOKEN')
 SECRET_KEY = os.getenv('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DEBUG', default = 1)
-#TODO
-ALLOWED_HOSTS = []
+DEBUG = int(os.getenv('DEBUG', default = 1))
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -83,15 +82,25 @@ WSGI_APPLICATION = 'stockAPI.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/2.2/ref/settings/#databases
 
+"""
+Local development database settings. 
+"""
+
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'stocks',
-        'USER': 'anthony',
-        'PASSWORD': '1235',
-        'HOST': 'localhost',
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
     }
 }
+
+"""
+Heroku database settings. Uncomment when you want to use it.
+Put this below the DATABASE={ ... } configuration.
+"""
+import dj_database_url
+db_from_env = dj_database_url.config()
+DATABASES['default'].update(db_from_env)
+DATABASES['default']['CONN_MAX_AGE'] = 500
 
 
 # Password validation
@@ -129,5 +138,4 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/2.2/howto/static-files/
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATIC_URL = '/static/'
