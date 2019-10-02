@@ -2,6 +2,8 @@ from django.shortcuts import render
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
+import django.utils.dateparse
+from django.conf import settings
 
 import numpy as np 
 import pandas as pd 
@@ -19,15 +21,30 @@ from .serializers import StockSerializer, PriceSerializer
 
 import datetime
 import holidays
+from ratelimit import limits, sleep_and_retry
+import requests
 
+
+URL = settings.URL
+token = settings.TOKEN
+symbols = 'ref-data/iex/symbols'
+PARAMS = {'token':token,'chartCloseOnly':'true'}
+ONE_MINUTE = 60
 ONE_DAY = datetime.timedelta(days=1)
 HOLIDAYS_US = holidays.US()
+
 
 def last_business_day():
     business_day = datetime.date.today()
     while business_day.weekday() in holidays.WEEKEND or business_day in HOLIDAYS_US:
         business_day -= ONE_DAY
     return business_day
+
+@sleep_and_retry
+@limits(calls=99, period=ONE_MINUTE)
+def call_api(Url,Params):
+    response = requests.get(url=Url,params=Params,timeout=5)
+    return response
 
 class Equity():
     def __init__(self,name,price_list):
@@ -65,15 +82,42 @@ class Optimize(APIView):
         return opt_weight
     
     def get(self,request,stocks_csv):
-        stocks_parsed = stocks_csv.split(',')
-        stocks = Stock.objects.filter(symbol__in=stocks_parsed)
-        if not stocks:
+        if stocks_csv == '':
             return Response('No symbols found', status=status.HTTP_404_NOT_FOUND)
+        stocks_parsed = stocks_csv.split(',')
+        stocks_in = Stock.objects.filter(symbol__in=stocks_parsed)
+        def fun(x):
+            s_in = [str(x) for x in list(stocks_in)]
+            if x not in s_in:
+                return True
+            else:
+                return False
+        stocks_not_in = list(filter(fun, stocks_parsed))
+        Stock_list = []
+        Price_list = []
+        #TODO refactor so that call api is just determined by if condition
+        for s in stocks_not_in:
+            res = call_api('{URL}{sy}/chart/'.format(URL=URL,sy=s),PARAMS)
+            s_hist = res.json()
+            st = Stock.objects.create(symbol=s)
+            Stock_list.append(st)
+            for i in s_hist:
+                Price_list.append(Price(close_price=i['close'],date= django.utils.dateparse.parse_date(i['date']),stock=st))
+        for n in stocks_in:
+            if n.prices.last().date == last_business_day():
+                continue
+            delta = last_business_day() - n.prices.first().date
+            res = call_api('{URL}{sy}/chart/'.format(URL=URL,sy=n),{**PARAMS,'chartLast':delta.days})
+            s_hist = res.json()
+            for i in s_hist:
+                Price_list.append(Price(close_price=i['close'],date= django.utils.dateparse.parse_date(i['date']),stock=n))
+        Price.objects.bulk_create(Price_list)
+        stocks = Stock.objects.filter(symbol__in=stocks_parsed)
         equity_list = []
         mean_list = []
         for item in stocks:
             if(item.prices.all()[:20].count() == 20):
-                equity_list.append(Equity(item.symbol,list(item.prices.all()[:21].values_list('close_price',flat=True))))
+                equity_list.append(Equity(item.symbol,list(item.prices.all()[:20].values_list('close_price',flat=True))))
             else:
                 return  Response('{symb} does not have enough historical data'.format(symb=item.symbol), status=status.HTTP_409_CONFLICT)
         for equity in equity_list:
