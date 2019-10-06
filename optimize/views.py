@@ -33,7 +33,7 @@ ONE_MINUTE = 60
 ONE_DAY = datetime.timedelta(days=1)
 HOLIDAYS_US = holidays.US()
 
-
+#helper functions
 def last_business_day():
     business_day = datetime.date.today()
     while business_day.weekday() in holidays.WEEKEND or business_day in HOLIDAYS_US:
@@ -46,7 +46,17 @@ def call_api(Url,Params):
     response = requests.get(url=Url,params=Params,timeout=5)
     return response
 
+def get_Json_response(url, stock, params):
+    resp = call_api('{URL}{sy}/chart/'.format(URL=url,sy=stock),params)
+    return resp.json()
+
+def create_Prices_List(s_hist,Price_list,stock_obj):
+    for i in s_hist:
+        Price_list.append(Price(close_price=i['close'],date= django.utils.dateparse.parse_date(i['date']),stock=stock_obj))
+
+#set up Equity class to hold individual stock info
 class Equity():
+    
     def __init__(self,name,price_list):
         self.name = name
         self.price_list = price_list
@@ -58,9 +68,7 @@ class Equity():
         df = df.dropna()
         return df
 
-#TODO make API CALLS INSTEAD if not IN DATABASE
 class Optimize(APIView):
-
  
     def findOptimalWeight(self,equity_list,cov_matrix,mean_list):
         leng = len(equity_list)
@@ -68,11 +76,11 @@ class Optimize(APIView):
         mean = mean_list
         sigma = cov_matrix
 
-        #minimize inverse of Sharpe Ratio 
+        #minimize negative of Sharpe Ratio = maximize sharpe ratio 
         def target(x, sigma, mean):
-            if x.dot(mean) == 0:
-                return float(sys.maxsize)
-            sr_inv = (np.sqrt(np.dot(np.dot(x.T,sigma),x)*252))/abs((x.dot(mean))*252)
+            if (np.sqrt(np.dot(np.dot(x.T,sigma),x)*252)) == 0:
+                return float(-sys.maxsize - 1)
+            sr_inv = -1*((x.dot(mean))*252)/(np.sqrt(np.dot(np.dot(x.T,sigma),x)*252))
             return sr_inv
 
         c = ({'type':'eq','fun':lambda x: sum(x) - 1})
@@ -82,37 +90,34 @@ class Optimize(APIView):
         return opt_weight
     
     def get(self,request,stocks_csv):
+        #parse request for stocks to optimize
+        #call api to create stock if not in database or update database if stock prices not updated
         if stocks_csv == '':
             return Response('No symbols found', status=status.HTTP_404_NOT_FOUND)
         stocks_parsed = stocks_csv.split(',')
-        stocks_in = Stock.objects.filter(symbol__in=stocks_parsed)
+        stocks_objs_in = Stock.objects.filter(symbol__in=stocks_parsed)
         def fun(x):
-            s_in = [str(x) for x in list(stocks_in)]
+            s_in = [str(x) for x in list(stocks_objs_in)]
             if x not in s_in:
                 return True
             else:
                 return False
-        stocks_not_in = list(filter(fun, stocks_parsed))
-        Stock_list = []
+        stocks_symbols_not_in = list(filter(fun, stocks_parsed))
         Price_list = []
-        #TODO refactor so that call api is just determined by if condition
-        for s in stocks_not_in:
-            res = call_api('{URL}{sy}/chart/'.format(URL=URL,sy=s),PARAMS)
-            s_hist = res.json()
+        for s in stocks_symbols_not_in:
+            s_hist = get_Json_response(URL,s,PARAMS)
             st = Stock.objects.create(symbol=s)
-            Stock_list.append(st)
-            for i in s_hist:
-                Price_list.append(Price(close_price=i['close'],date= django.utils.dateparse.parse_date(i['date']),stock=st))
-        for n in stocks_in:
+            create_Prices_List(s_hist,Price_list,st)
+        for n in stocks_objs_in:
             if n.prices.last().date == last_business_day():
                 continue
             delta = last_business_day() - n.prices.first().date
-            res = call_api('{URL}{sy}/chart/'.format(URL=URL,sy=n),{**PARAMS,'chartLast':delta.days})
-            s_hist = res.json()
-            for i in s_hist:
-                Price_list.append(Price(close_price=i['close'],date= django.utils.dateparse.parse_date(i['date']),stock=n))
+            s_hist = get_Json_response(URL,n,{**PARAMS,'chartLast':delta.days})
+            create_Prices_List(s_hist,Price_list,n)
         Price.objects.bulk_create(Price_list)
         stocks = Stock.objects.filter(symbol__in=stocks_parsed)
+
+        #optimize portfolio and send json response back 
         equity_list = []
         mean_list = []
         for item in stocks:
