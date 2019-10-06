@@ -109,7 +109,7 @@ class Optimize(APIView):
             st = Stock.objects.create(symbol=s)
             create_Prices_List(s_hist,Price_list,st)
         for n in stocks_objs_in:
-            if n.prices.last().date == last_business_day():
+            if n.prices.first().date == last_business_day():
                 continue
             delta = last_business_day() - n.prices.first().date
             s_hist = get_Json_response(URL,n,{**PARAMS,'chartLast':delta.days})
