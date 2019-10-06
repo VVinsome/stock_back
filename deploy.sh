@@ -1,7 +1,9 @@
+
 # build our heroku-ready local Docker image
 docker build -t stock-back-api -f Dockerfile .
 
-
+#login to heroku docker
+heroku container:login
 # push your directory container for the web process to heroku
 heroku container:push web -a stock-back-api
 
