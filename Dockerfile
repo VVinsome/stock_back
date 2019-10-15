@@ -15,11 +15,6 @@ ENV DEBIAN_FRONTEND=noninteractive
 # set project environment variables
 # grab these via Python's os.environ
 # these are 100% optional here
-ENV PORT=8888
-ENV DEBUG 0
-ENV token pk_a032637297624a9eb87d555a8fa74fc9
-ENV URL https://cloud.iexapis.com/stable/stock/
-ENV SECRET_KEY 'hz^9#5l0p@#n3n8gc5t36@uon9+x3jnan=q==8xl&4n=*((y#k'
 
 
 # install environment dependencies
