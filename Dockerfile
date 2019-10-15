@@ -12,9 +12,6 @@ ENV PYTHONUNBUFFERED 1
 ENV LANG C.UTF-8
 ENV DEBIAN_FRONTEND=noninteractive 
 
-# set project environment variables
-# grab these via Python's os.environ
-# these are 100% optional here
 
 
 # install environment dependencies
