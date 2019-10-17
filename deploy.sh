@@ -1,4 +1,4 @@
-
+heroku login
 # build our heroku-ready local Docker image
 docker build -t stock-back-api -f Dockerfile .
 

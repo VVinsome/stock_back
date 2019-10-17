@@ -28,10 +28,11 @@ import requests
 URL = settings.URL
 token = settings.TOKEN
 symbols = 'ref-data/iex/symbols'
-PARAMS = {'token':token,'chartCloseOnly':'true'}
+PARAMS = {'token':token,'chartCloseOnly':'true','includeToday':'true'}
 ONE_MINUTE = 60
 ONE_DAY = datetime.timedelta(days=1)
 HOLIDAYS_US = holidays.US()
+
 
 #helper functions
 def last_business_day():
@@ -112,8 +113,8 @@ class Optimize(APIView):
             if n.prices.first().date == last_business_day():
                 continue
             delta = last_business_day() - n.prices.first().date
-            s_hist = get_Json_response(URL,n,{**PARAMS,'chartLast':delta.days})
-            create_Prices_List(s_hist,Price_list,n)
+            n_hist = get_Json_response(URL,n,{**PARAMS,'chartLast':delta.days})
+            create_Prices_List(n_hist,Price_list,n)
         Price.objects.bulk_create(Price_list)
         stocks = Stock.objects.filter(symbol__in=stocks_parsed)
 
