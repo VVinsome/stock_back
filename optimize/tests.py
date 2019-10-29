@@ -6,15 +6,17 @@ import numpy as np
 from .views import Optimize,Equity
 import random
 # Create your tests here.
-def Rand(start,end,num):
-    res = []
-    random.seed(10)
-    for j in range(num):
-        res.append(float(random.randint(start,end)))
+
+def createList(start,total,increment):
+    res = [start + i*increment for i in range(total)]
     return res
-lst = Rand(50,55,30) 
-lst2 = Rand(100,104,30)
-lst3 = Rand(30,32,30)
+def createRiskyList(start,total,increment):
+    res = [start + i*increment if i % 10 == 0 else start - (i+1)*increment for i in range(total)]
+    return res
+
+lst = createRiskyList(400,30,-.0005)
+lst2 = createList(100000,30,.001)
+lst3 = createRiskyList(400,30,.002)
 def create_stock(stock_name, price_list):
     stock = Stock.objects.create(symbol=stock_name)
     for i in range(len(price_list)):
@@ -45,10 +47,14 @@ class StockModelTest(TestCase):
         self.assertEqual(response.data['AAPL']['weight'], 1.0)
 
     def testOptimizeTwoStockView(self):
-        response = self.client.get('/optimize/AAPL,GOOG',follow=True)
+        response = self.client.get('/optimize/AAPL,AMZN',follow=True)
         self.assertTrue(response.data.get('AAPL') != None)
-        self.assertTrue(response.data.get('GOOG') != None)
-    
+        self.assertTrue(.4 < response.data.get('AAPL')['weight'] < .6 )
+        self.assertTrue(.4 < response.data.get('AMZN')['weight'] < .6 )
+  
     def testOptimizeThreeStockView(self):
         response = self.client.get('/optimize/AAPL,GOOG,AMZN',follow=True)
         self.assertTrue(response.data.get('AMZN') != None)
+        self.assertTrue(.05 < response.data.get('AMZN')['weight'] < .10 )
+        self.assertTrue(.30 < response.data.get('AAPL')['weight'] < .35 )
+        self.assertTrue(.50 < response.data.get('GOOG')['weight'] < .60 )
